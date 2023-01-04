@@ -16,6 +16,12 @@ Deep learning has become a primary choice in medical image analysis due to its p
        publisher={World Scientific}
      }
 
+## Train a pair of EDCA-Nets
+
+```shell
+python main.py --data_dir [PATH TO THE DATA] --model_num 2 --init_lr 0.0001 --num_classes [NUMBER OF CLASSES] --epochs 20 --independent False
+```
+
 ## DCA module
 
 ![Poster](figures/dca.png)

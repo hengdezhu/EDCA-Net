@@ -22,6 +22,24 @@ Deep learning has become a primary choice in medical image analysis due to its p
 python main.py --data_dir [PATH TO THE DATA] --model_num 2 --init_lr 0.0001 --num_classes [NUMBER OF CLASSES] --epochs 20 --independent False
 ```
 
+The image dataset's folder should be of the following structure:
+
+    .
+    ├── train
+    │   ├── class1
+    │       ├── 1.png
+    │       ├── 2.png
+    │   ├── class2
+    │       ├── 1.png
+    │       ├── 2.png
+    ├── test
+    │   ├── class1
+    │       ├── 1.png
+    │       ├── 2.png
+    │   ├── class2
+    │       ├── 1.png
+    │       ├── 2.png
+
 ## DCA module
 
 ![Poster](figures/dca.png)

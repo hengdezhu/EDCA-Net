@@ -10,7 +10,7 @@ Deep learning has become a primary choice in medical image analysis due to its p
 
     @article{zhu2022evolutionary,
        title={An Evolutionary Attention-Based Network for Medical Image Classification},
-       author={Zhu, Hengde and Wang, Jian and Wang, Shui-Hua and Raman, Rajeev and Gorriz, Juan M and Zhang, Yu-Dongu},
+       author={Zhu, Hengde and Wang, Jian and Wang, Shui-Hua and Raman, Rajeev and Gorriz, Juan M and Zhang, Yu-Dong},
        journal={International Journal of Neural Systems},
        year={2022},
        publisher={World Scientific}

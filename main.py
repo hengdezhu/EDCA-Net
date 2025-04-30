@@ -4,6 +4,7 @@ Created on Sun Jul 28 11:07:46 2019
 @author: chxy
 """
 
+import os
 import torch
 import warnings
 
@@ -31,15 +32,22 @@ def main(config):
         
     # instantiate data loaders
     test_data_loader = get_test_loader(
-        config.data_dir+'test/', config.batch_size, **kwargs
+        os.path.join(config.data_dir, 'test'), config.batch_size, **kwargs
     )
     
     if config.is_train:
-        train_data_loader = get_train_loader(
-            config.data_dir+'train/', config.batch_size,
+        # train_data_loader = get_train_loader(
+        #     os.path.join(config.data_dir, 'train'), config.batch_size,
+        #     config.random_seed, config.shuffle, **kwargs
+        # )
+        # data_loader = (train_data_loader, test_data_loader)
+
+        train_data_loader, valid_data_loader = get_data_loader(
+            os.path.join(config.data_dir, 'train'), config.batch_size,
             config.random_seed, config.shuffle, **kwargs
         )
-        data_loader = (train_data_loader, test_data_loader)
+
+        data_loader = (train_data_loader, valid_data_loader)
     else:
         data_loader = test_data_loader
 

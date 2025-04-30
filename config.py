@@ -24,9 +24,9 @@ def add_argument_group(name):
 data_arg = add_argument_group('Data Params')
 data_arg.add_argument('--num_classes', type=int, default=2,
                       help='Number of classes to classify')
-data_arg.add_argument('--batch_size', type=int, default=32,
+data_arg.add_argument('--batch_size', type=int, default=16,
                       help='# of images in each batch of data')
-data_arg.add_argument('--num_workers', type=int, default=1,
+data_arg.add_argument('--num_workers', type=int, default=16,
                       help='# of subprocesses to use for data loading')
 data_arg.add_argument('--pin_memory', type=str2bool, default=True,
                       help='whether to copy tensors into CUDA pinned memory')                      
@@ -67,6 +67,8 @@ misc_arg.add_argument('--data_dir', type=str, default='./data/cifar100',
                       help='Directory in which data is stored')
 misc_arg.add_argument('--ckpt_dir', type=str, default='./ckpt',
                       help='Directory in which to save model checkpoints')
+misc_arg.add_argument('--load_path', nargs='+', type=str, default='./ckpt',
+                      help='Checkpiont paths from which the models are loaded')
 misc_arg.add_argument('--logs_dir', type=str, default='./logs/',
                       help='Directory in which Tensorboard logs wil be stored')
 misc_arg.add_argument('--use_tensorboard', type=str2bool, default=True,
@@ -75,7 +77,7 @@ misc_arg.add_argument('--resume', type=str2bool, default=False,
                       help='Whether to resume training from checkpoint')
 misc_arg.add_argument('--print_freq', type=int, default=10,
                       help='How frequently to print training details')
-misc_arg.add_argument('--save_name', type=str, default='model',
+misc_arg.add_argument('--save_name', type=str, default='densenet',
                       help='Name of the model to save as')
 misc_arg.add_argument('--model_num', type=int, default=2,
                       help='Number of models to train for DML')

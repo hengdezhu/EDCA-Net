@@ -23,8 +23,7 @@ def get_train_loader(data_dir,
     ])
 
     # load dataset
-    dataset = datasets.ImageFolder(root=data_dir,
-                                transform=trans)
+    dataset = datasets.ImageFolder(root=data_dir, transform=trans)
     
     if shuffle:
         np.random.seed(random_seed)
@@ -74,7 +73,7 @@ def get_data_loader(data_dir,
     dataset = datasets.ImageFolder(root=data_dir,
                                 transform=trans)
 
-    train_size = int(len(dataset) * 0.8)
+    train_size = int(len(dataset) * 0.9)
     valid_size = len(dataset) - train_size
 
     train_set, valid_set = torch.utils.data.random_split(dataset, [train_size, valid_size], torch.Generator().manual_seed(random.randint(0,100)))

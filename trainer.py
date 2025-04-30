@@ -1,3 +1,6 @@
+import scipy.stats as stats
+import random
+import numpy as np
 import torch
 import torch.nn as nn
 from torch.autograd import Variable
@@ -11,8 +14,8 @@ import shutil
 from tqdm import tqdm
 from utils import accuracy, AverageMeter
 from densenet import dcanet121
-from tensorboard_logger import configure, log_value
 from sklearn.metrics import classification_report
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 
 class Trainer(object):
     """
@@ -60,7 +63,7 @@ class Trainer(object):
         self.counter = 0
         self.lr_patience = config.lr_patience
         self.train_patience = config.train_patience
-        self.use_tensorboard = config.use_tensorboard
+        # self.use_tensorboard = config.use_tensorboard
         self.resume = config.resume
         self.print_freq = config.print_freq
         self.model_name = config.save_name
@@ -71,17 +74,11 @@ class Trainer(object):
         self.optimizers = []
         self.schedulers = []
 
+        self.load_path = config.load_path
+
         self.loss_kl = nn.KLDivLoss(reduction='batchmean')
         self.loss_ce = nn.CrossEntropyLoss()
         self.best_valid_accs = [0.] * self.model_num
-
-        # configure tensorboard logging
-        if self.use_tensorboard:
-            tensorboard_dir = self.logs_dir + self.model_name
-            print('[*] Saving tensorboard logs to {}'.format(tensorboard_dir))
-            if not os.path.exists(tensorboard_dir):
-                os.makedirs(tensorboard_dir)
-            configure(tensorboard_dir)
 
         for i in range(self.model_num):
             model = dcanet121(weights='DenseNet121_Weights.DEFAULT')
@@ -97,6 +94,10 @@ class Trainer(object):
 
             optimizer = optim.Adam(model.parameters(), lr=self.lr)
             self.optimizers.append(optimizer)
+        
+        # load the most recent checkpoint
+        if self.resume:
+            self.load_checkpoint(self.load_path)
 
         for i in range(self.model_num):
             print('[*] Number of parameters of one model: {:,}'.format(
@@ -110,9 +111,6 @@ class Trainer(object):
         and if the validation accuracy is improved upon,
         a separate ckpt is created for use on the test set.
         """
-        # load the most recent checkpoint
-        if self.resume:
-            self.load_checkpoint(best=False)
 
         print("\n[*] Train on {} samples, validate on {} samples".format(
             self.num_train, self.num_valid)
@@ -147,12 +145,6 @@ class Trainer(object):
                 msg = msg1 + msg2
                 print(msg.format(i+1, train_losses[i].avg, train_accs[i].avg, valid_losses[i].avg, valid_accs[i].avg))
 
-            # check for improvement
-            #if not is_best:
-                #self.counter += 1
-            #if self.counter > self.train_patience:
-                #print("[!] No improvement in a while, stopping training.")
-                #return
                 self.best_valid_accs[i] = max(valid_accs[i].avg, self.best_valid_accs[i])
                 self.save_checkpoint(i,
                     {'epoch': epoch + 1,
@@ -222,34 +214,6 @@ class Trainer(object):
                     loss.backward()
                     self.optimizers[i].step()
 
-                # Training Strategy : a model only learn from the other who performs better, otherwise the kl loss won't be added with its ce loss
-                # ce_loss1 = self.loss_ce(outputs[0], labels)
-                # ce_loss2 = self.loss_ce(outputs[1], labels)
-
-                # best = 0 if ce_loss1 <= ce_loss2 else 1
-
-
-                # for i in range(self.model_num):
-                #     ce_loss = self.loss_ce(outputs[i], labels)
-                #     kl_loss = 0
-
-                #     for j in range(self.model_num):
-                #         if i!=j:
-                #             kl_loss += self.loss_kl(F.log_softmax(outputs[i], dim = 1), 
-                #                                     F.softmax(Variable(outputs[j]), dim=1))
-                #     loss = (ce_loss + kl_loss / (self.model_num - 1)) if i != best else ce_loss
-                    
-                #     # measure accuracy and record loss
-                #     prec = accuracy(outputs[i].data, labels.data, topk=(1,))[0]
-                #     kl_losses[i].update(kl_loss.item(), images.size()[0])
-                #     losses[i].update(loss.item(), images.size()[0])
-                #     accs[i].update(prec.item(), images.size()[0])
-
-                #     # compute gradients and update SGD
-                #     self.optimizers[i].zero_grad()
-                #     loss.backward()
-                #     self.optimizers[i].step()
-
                 # measure elapsed time
                 toc = time.time()
                 batch_time.update(toc-tic)
@@ -273,13 +237,6 @@ class Trainer(object):
 
                 self.batch_size = images.shape[0]
                 pbar.update(self.batch_size)
-
-                # log to tensorboard
-                if self.use_tensorboard:
-                    iteration = epoch*len(self.train_loader) + i
-                    for i in range(self.model_num):
-                        log_value('train_loss_%d' % (i+1), losses[i].avg, iteration)
-                        log_value('train_acc_%d' % (i+1), accs[i].avg, iteration)
             
             return losses, accs
 
@@ -338,13 +295,20 @@ class Trainer(object):
             y_pred[i] = torch.cat(y_pred[i], dim=0)
             valid_report.append(classification_report(y_true, y_pred[i], zero_division=0, digits=4))
 
-        # log to tensorboard for every epoch
-        if self.use_tensorboard:
-            for i in range(self.model_num):
-                log_value('valid_loss_%d' % (i+1), losses[i].avg, epoch+1)
-                log_value('valid_acc_%d' % (i+1), accs[i].avg, epoch+1)
-
         return losses, accs, valid_report
+
+    def load_checkpoint(self, ckpt_path):
+        for i in range(self.model_num):
+            if os.path.isfile(ckpt_path[i]):
+                print("[*] Loading one checkpoint from {}".format(ckpt_path[i]))
+                checkpoint = torch.load(ckpt_path[i], map_location='cuda:0' if self.use_gpu else 'cpu')
+                self.start_epoch = checkpoint['epoch']
+                self.models[i].load_state_dict(checkpoint['model_state'])
+                best_valid_acc = checkpoint['best_valid_acc']
+                print("[*] Best validation accuracy: {:.4f}".format(best_valid_acc))
+            else:
+                print("[!] No checkpoint found at {}".format(ckpt_path[i]))
+            # print("[*] Loaded one checkpoint from {}".format(ckpt_path[i]))
 
     def test(self):
         """
@@ -352,32 +316,136 @@ class Trainer(object):
         This function should only be called at the very
         end once the model has finished training.
         """
-        losses = AverageMeter()
-        top1 = AverageMeter()
-        top5 = AverageMeter()
-        
-        # load the best checkpoint
-        self.load_checkpoint(best=self.best)
-        self.model.eval()
-        for i, (images, labels) in enumerate(self.test_loader):
-            if self.use_gpu:
-                images, labels = images.cuda(), labels.cuda()
-            images, labels = Variable(images), Variable(labels)
-        
-            #forward pass
-            outputs = self.model(images)
-            loss = self.loss_fn(outputs, labels)
+        losses = []
+        accs = []
+        y_true = []
+        y_pred = []
+        valid_report = []
 
-            # measure accuracy and record loss
-            prec1, prec5 = accuracy(outputs.data, labels.data, topk=(1, 5))
-            losses.update(loss.item(), images.size()[0])
-            top1.update(prec1.item(), images.size()[0])
-            top5.update(prec5.item(), images.size()[0])
+        for i in range(self.model_num):
+            y_pred.append([])
 
-        print(
-            '[*] Test loss: {:.4f}, top1_acc: {:.4f}%, top5_acc: {:.4f}%'.format(
-                losses.avg, top1.avg, top5.avg)
-        )
+        for i in range(self.model_num):
+            self.models[i].eval()
+            losses.append(AverageMeter())
+            accs.append(AverageMeter())
+
+        # For ensemble
+        all_outputs_soft = []
+        all_outputs_max = []
+
+        with torch.no_grad():
+            for i, (images, labels) in enumerate(self.test_loader):
+                if self.use_gpu:
+                    images, labels = images.cuda(), labels.cuda()
+                images, labels = Variable(images), Variable(labels)
+
+                #forward pass
+                outputs=[]
+                for model in self.models:
+                    outputs.append(model(images))
+
+                # soft ensemble
+                stacked_outputs = torch.stack(outputs)  # shape: (model_num, batch_size, num_classes)
+                all_outputs_soft.append(stacked_outputs.permute(1, 0, 2))  # -> (batch_size, model_num, num_classes)
+                
+                # max ensemble
+                all_outputs_max.append(torch.max(stacked_outputs, dim=0)[0])  # (batch_size, num_classes)
+
+                for i in range(self.model_num):
+                    loss = self.loss_ce(outputs[i], labels)
+
+                    # measure accuracy and record loss
+                    prec = accuracy(outputs[i].data, labels.data, topk=(1,))[0]
+                    losses[i].update(loss.item(), images.size()[0])
+                    accs[i].update(prec.item(), images.size()[0])
+
+                    # record predictions for final result statistics
+                    _, pred = outputs[i].data.topk(1, 1, True, True)
+                    pred = pred.t()
+                    y_pred[i].append(pred[0].cpu())
+
+                y_true.append(labels.data.cpu())
+
+        y_true = torch.cat(y_true, dim=0)
+
+        for i in range(self.model_num):
+            y_pred[i] = torch.cat(y_pred[i], dim=0)
+            valid_report.append(classification_report(y_true, y_pred[i], zero_division=0, digits=4))
+        
+            msg = "model_{:d}: test loss: {:.4f} - test acc: {:.4f}"
+            print(msg.format(i+1, losses[i].avg, accs[i].avg))
+
+        # Soft Ensemble
+        soft_outputs = torch.cat(all_outputs_soft, dim=0)  # shape: (total_samples, model_num, num_classes)
+        soft_mean = torch.mean(soft_outputs, dim=1)  # (total_samples, num_classes)
+        _, soft_pred = torch.max(soft_mean, dim=1)  # (total_samples,)
+        print("\n[Soft Ensemble]")
+        print(classification_report(y_true.numpy(), soft_pred.cpu().numpy(), zero_division=0, digits=4))
+
+        # Max Ensemble
+        max_outputs = torch.cat(all_outputs_max, dim=0)  # shape: (total_samples, num_classes)
+        _, max_pred = torch.max(max_outputs, dim=1)
+        print("\n[Max Ensemble]")
+        print(classification_report(y_true.numpy(), max_pred.cpu().numpy(), zero_division=0, digits=4))
+
+        # --- Hard Voting Ensemble ---
+        # y_pred shape: model_num x total_samples
+        y_preds_stack = torch.stack(y_pred, dim=0)   # (model_num, total_samples)
+        y_preds_np = y_preds_stack.numpy()           # 转为 numpy 进行 scipy mode
+
+        # mode along axis=0 → majority vote per sample
+        hard_vote_preds, _ = stats.mode(y_preds_np, axis=0, keepdims=False)
+
+        print("\n[Hard Majority Voting Ensemble]")
+        print(classification_report(y_true.numpy(), hard_vote_preds, zero_division=0, digits=4))
+        # losses = AverageMeter()
+        # top1 = AverageMeter()
+        
+        # for i in range(self.model_num):
+        #     self.models[i].eval()
+        # for i, (images, labels) in enumerate(self.test_loader):
+        #     if self.use_gpu:
+        #         images, labels = images.cuda(), labels.cuda()
+        #     images, labels = Variable(images), Variable(labels)
+        
+        #     #forward pass
+        #     outputs = self.models[0](images)
+        #     ce_loss = self.loss_ce(outputs, labels)
+
+        #     # measure accuracy and record loss
+        #     prec1 = accuracy(outputs.data, labels.data, topk=(1,))[0]
+        #     losses.update(ce_loss.item(), images.size()[0])
+        #     top1.update(prec1.item(), images.size()[0])
+
+        # print(
+        #     '[*] Test loss: {:.4f}, top1_acc: {:.4f}%'.format(
+        #         losses.avg, top1.avg)
+        # )
+
+    def calculate_soft_majority_pred(self, y_pred):
+        return np.mean(y_pred, axis=0)
+
+    def calculate_max_majority_pred(self, y_pred):
+        # print(len(y_pred))
+        return np.maximum.reduce(y_pred)
+
+    def calculate_hard_majority_pred(self, y_pred):
+        max_idx = torch.Tensor(y_pred).data.max(2, keepdim=True)[1].view(-1).reshape(len(y_pred), -1)
+        vote = np.zeros(np.asarray(y_pred).shape)
+        for i in range(max_idx.shape[0]):
+            for j in range(max_idx.shape[1]):
+                vote[i, j, max_idx[i, j]] = 1
+
+        vote = np.sum(vote, axis=0)
+        # For some images, one cannot get the result based on hard voting
+        max_votes = torch.Tensor(vote).data.max(1, keepdim=True)[0].view(-1)
+        # The below lines needed to be revised
+        idx = (max_votes==1).nonzero().view(-1)
+        # Perform max voting for those cases
+        vote[idx, :] = self.calculate_max_majority_pred(np.asarray(y_pred)[:, idx, :])
+
+        return vote
 
     def save_checkpoint(self, i, state, is_best):
         """

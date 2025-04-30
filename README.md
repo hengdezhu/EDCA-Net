@@ -12,6 +12,12 @@ Deep learning has become a primary choice in medical image analysis due to its p
 python main.py --data_dir [PATH TO THE DATA] --model_num 2 --init_lr 0.0001 --num_classes [NUMBER OF CLASSES] --epochs 20 --independent False
 ```
 
+## Test a pair of EDCA-Nets
+
+```shell
+python main.py --data_dir [PATH TO THE DATA] --is_train False  --load_path [CHECKPOINT PATH 1] [CHECKPOINT PATH 2] --num_classes [NUMBER OF CLASSES]  --resume True --model_num 2
+```
+
 The image dataset's folder should be of the following structure:
 
     .
